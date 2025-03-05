@@ -1,11 +1,38 @@
+{{
+  config(
+    materialized='view'
+  )
+}}
 
-WITH CUSTOMERORDERS AS (
-    SELECT C.CUSTOMERID, CONCAT(C.FIRSTNAME, ' ', C.LASTNAME) AS CUSTOMERNAME, COUNT(O.ORDERID) AS NO_OF_ORDERS
-    FROM L1_LANDING.CUSTOMERS C
-    JOIN L1_LANDING.ORDERS O ON C.CUSTOMERID = O.CUSTOMERID
-    GROUP BY C.CUSTOMERID, CUSTOMERNAME
-    ORDER BY NO_OF_ORDERS
+with customers as (
+    select * from {{ ref('stg_customers') }}
+),
+
+orders as (
+    select * from {{ ref('stg_orders') }}
+),
+
+customer_orders as (
+    select
+        CustomerID,
+        min(OrderDate) as first_order_date,
+        max(OrderDate) as most_recent_order_date,
+        count(OrderID) as number_of_orders
+    from orders
+    group by 1
+
+),
+
+final as (
+    select
+        customers.CustomerID,
+        customers.FirstName,
+        customers.LastName,
+        customer_orders.first_order_date,
+        customer_orders.most_recent_order_date,
+        coalesce(customer_orders.number_of_orders, 0) as number_of_orders
+    from customers
+    left join customer_orders using (CustomerID)
 )
 
-SELECT CUSTOMERID, CUSTOMERNAME, NO_OF_ORDERS
-FROM CUSTOMERORDERS
+select * from final
